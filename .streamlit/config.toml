@@ -1,45 +1,4 @@
-[runner]
-magicEnabled = true
-
 [server]
+headless = true
 enableCORS = false
-enableXsrfProtection = true
-```
-
-### Paso 3: Arregla `requirements.txt`
-
-Asegúrate que tu `requirements.txt` sea EXACTAMENTE así (sin comillas invertidas):
-```
-streamlit
-opencv-python-headless
-cvzone==1.6.1
-mediapipe
-numpy
-pandas
-matplotlib
-```
-
-### Paso 4: Crea `packages.txt` para forzar Python 3.12
-
-Crea un nuevo archivo llamado `packages.txt` con:
-```
-python3.12-dev
-```
-
-### Paso 5: ELIMINA todos estos archivos si existen:
-- `.runtime.txt`
-- `runtime.txt`  
-- `.python-version`
-
-## Solución ALTERNATIVA (más rápida):
-
-Si lo anterior no funciona inmediatamente, **usa MediaPipe lite** que SÍ funciona en Python 3.13:
-
-**Modifica tu `requirements.txt`:**
-```
-streamlit
-opencv-python-headless
-numpy
-pandas
-matplotlib
-mediapipe-lite
+enableXsrfProtection = false
