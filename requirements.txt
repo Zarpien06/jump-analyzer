@@ -5,3 +5,4 @@ pandas
 matplotlib
 mediapipe==0.10.14
 openai
+scikit-learn
