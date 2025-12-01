@@ -1,8 +1,7 @@
 streamlit
 opencv-python-headless
 cvzone==1.6.1
-mediapipe==0.10.8
+mediapipe
 numpy
 pandas
 matplotlib
-
