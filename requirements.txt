@@ -5,3 +5,23 @@ mediapipe
 numpy
 pandas
 matplotlib
+```
+
+### 3. Espera la reconstrucción en Streamlit Cloud
+
+Ahora ve a **Streamlit Cloud**:
+1. Ve a tu dashboard de Streamlit Cloud
+2. Busca tu app "jump-analyzer"
+3. Haz clic en los 3 puntos (⋮) → **Reboot app**
+4. O simplemente espera a que se reconstruya automáticamente
+
+### 4. Verifica los logs
+
+Cuando se esté reconstruyendo, deberías ver en los logs algo como:
+```
+Using Python 3.12.x environment
+```
+
+En lugar de:
+```
+Using Python 3.13.9 environment  ❌
