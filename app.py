@@ -228,14 +228,19 @@ if upload:
                 - recomendaciones avanzadas
                 """
 
-                with st.spinner("Generando análisis IA…"):
-                    ai = client.chat.completions.create(
-                        model="gpt-4.1",
-                        messages=[{"role": "user", "content": prompt}]
-                    )
+                try:
+                    with st.spinner("Generando análisis IA…"):
+                        ai = client.chat.completions.create(
+                            model="gpt-4o",  # ✅ Modelo corregido
+                            messages=[{"role": "user", "content": prompt}]
+                        )
 
-                st.subheader("🧠 IA Coach")
-                st.write(ai.choices[0].message["content"])
+                    st.subheader("🧠 IA Coach")
+                    st.markdown(ai.choices[0].message.content)  # ✅ Corrección: .content en lugar de ["content"]
+                    
+                except Exception as e:
+                    st.error(f"❌ Error al generar análisis IA: {str(e)}")
+                    st.info("Verifica tu API key y créditos en https://platform.openai.com/account/billing")
 
             # ------------------ PREDICCIÓN ------------------
             if show_predict:
