@@ -4,5 +4,5 @@ numpy
 pandas
 matplotlib
 mediapipe==0.10.14
-anthropic
+openai
 scikit-learn
