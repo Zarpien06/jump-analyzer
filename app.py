@@ -1,6 +1,6 @@
 import streamlit as st
 import cv2
-from cvzone.PoseModule import PoseDetector
+import mediapipe as mp
 import numpy as np
 import pandas as pd
 import tempfile
