@@ -11,12 +11,12 @@ import tempfile
 import math
 from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
-import anthropic
+from openai import OpenAI
 
 
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Jump Analyzer IA", layout="wide")
-client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 st.title("Jump Analyzer — IA Coach, Técnica y Predicción")
 st.markdown("""
@@ -27,7 +27,7 @@ Incluye:
 - **Altura del salto (fórmula física)**
 - **Altura por desplazamiento**
 - **Análisis técnico con ángulos**
-- **Evaluación inteligente (IA Coach Claude)**
+- **Evaluación inteligente (IA Coach GPT)**
 - **Predicción de tu progreso**
 """)
 
@@ -205,43 +205,42 @@ if upload:
                 ax.invert_yaxis()
                 st.pyplot(fig)
 
-            # ------------------ IA COACH CON CLAUDE ------------------
+            # ------------------ IA COACH ------------------
             if show_ai:
-                prompt = f"""Actúa como un entrenador profesional de salto vertical.
+                prompt = f"""
+                Actúa como un entrenador profesional de salto vertical.
 
-Datos del salto:
-- Tiempo de vuelo: {T:.3f}s
-- Altura física: {h_cm:.1f} cm
-- Altura por cadera: {real_cm:.1f} cm
-- Altura del usuario: {user_height_cm} cm
-- Ángulo de rodilla mínimo: {df['knee_angle'].min():.1f}°
-- Ángulo de cadera mínimo: {df['hip_angle'].min():.1f}°
-- Simetría tobillos: diferencia promedio = {float(df['ankle_left_y'].median() - df['ankle_right_y'].median()):.2f}px
+                Datos del salto:
+                - Tiempo de vuelo: {T:.3f}s
+                - Altura física: {h_cm:.1f} cm
+                - Altura por cadera: {real_cm:.1f} cm
+                - Altura del usuario: {user_height_cm} cm
+                - Ángulo de rodilla mínimo: {df['knee_angle'].min()}
+                - Ángulo de cadera mínimo: {df['hip_angle'].min()}
+                - Simetría tobillos: diferencia promedio = {float(df['ankle_left_y'].median() - df['ankle_right_y'].median()):.2f}px
 
-Evalúa en español:
-- Técnica del salto
-- Profundidad del squat
-- Explosividad
-- Estabilidad lateral
-- Simetría
-- Recomendaciones específicas y avanzadas para mejorar"""
+                Evalúa:
+                - técnica del salto
+                - profundidad del squat
+                - explosividad
+                - estabilidad lateral
+                - simetría
+                - recomendaciones avanzadas
+                """
 
                 try:
-                    with st.spinner("Generando análisis IA con Claude…"):
-                        message = client.messages.create(
-                            model="claude-3-5-sonnet-20241022",
-                            max_tokens=1024,
-                            messages=[
-                                {"role": "user", "content": prompt}
-                            ]
+                    with st.spinner("Generando análisis IA…"):
+                        ai = client.chat.completions.create(
+                            model="gpt-4o",  # ✅ Modelo corregido
+                            messages=[{"role": "user", "content": prompt}]
                         )
 
-                    st.subheader("🧠 IA Coach (Claude)")
-                    st.markdown(message.content[0].text)
+                    st.subheader("🧠 IA Coach")
+                    st.markdown(ai.choices[0].message.content)  # ✅ Corrección: .content en lugar de ["content"]
                     
                 except Exception as e:
                     st.error(f"❌ Error al generar análisis IA: {str(e)}")
-                    st.info("Verifica tu API key de Anthropic en https://console.anthropic.com/")
+                    st.info("Verifica tu API key y créditos en https://platform.openai.com/account/billing")
 
             # ------------------ PREDICCIÓN ------------------
             if show_predict:
