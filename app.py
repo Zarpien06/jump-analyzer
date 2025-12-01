@@ -7,31 +7,40 @@ import tempfile
 import os
 import math
 from matplotlib import pyplot as plt
+from sklearn.linear_model import LinearRegression
+from openai import OpenAI
 
-st.set_page_config(page_title="Jump Analyzer", layout="wide")
+# ------------------ CONFIG ------------------
+st.set_page_config(page_title="Jump Analyzer IA", layout="wide")
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.title("Jump Analyzer — Medición de saltos")
+st.title("Jump Analyzer — IA Coach, Técnica y Predicción")
 st.markdown("""
-Esta app procesa un video y detecta saltos.
-Calcula el *tiempo de vuelo* (T) y estima la *altura del salto* con:
+Procesa un video, detecta saltos, analiza tu técnica con IA y te da recomendaciones profesionales.
 
-\\[ h = g * T^2 / 8 \\]
-
-Para convertir a centímetros se pide tu altura real.
+Incluye:
+- **Tiempo de vuelo**
+- **Altura del salto (fórmula física)**
+- **Altura por desplazamiento**
+- **Análisis técnico con ángulos**
+- **Evaluación inteligente (IA Coach GPT)**
+- **Predicción de tu progreso**
 """)
 
-# Sidebar
+# ------------------ SIDEBAR ------------------
 with st.sidebar:
     st.header("Ajustes")
     user_name = st.text_input("Nombre (opcional)")
-    user_height_cm = st.number_input("Tu altura real (cm)", min_value=100, max_value=250, value=175)
+    user_height_cm = st.number_input("Tu altura (cm)", min_value=100, max_value=250, value=175)
     detection_confidence = st.slider("Confianza Pose", 0.1, 0.99, 0.5)
-    show_plots = st.checkbox("Mostrar gráfico", value=True)
+    show_ai = st.checkbox("Activar IA Coach", True)
+    show_technique = st.checkbox("Analizar técnica", True)
+    show_predict = st.checkbox("Predecir progreso", True)
+    show_plots = st.checkbox("Mostrar gráficos", True)
     process_button = st.button("Procesar video")
 
 st.info("Sugerencia: video de perfil y cuerpo completo.")
 
-# Entrada de video
 col1, col2 = st.columns([1, 3])
 with col1:
     upload = st.file_uploader("Sube video", type=["mp4", "mov", "avi", "mkv"])
@@ -43,8 +52,8 @@ def save_uploaded_file(uploaded_file):
     tfile.write(uploaded_file.read())
     return tfile.name
 
-# Análisis del video usando MediaPipe
-def analyze_video(path, fps_override=None):
+# ------------------ VIDEO ANALYSIS ------------------
+def analyze_video(path):
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose(
         static_image_mode=False,
@@ -54,109 +63,106 @@ def analyze_video(path, fps_override=None):
     )
     
     cap = cv2.VideoCapture(path)
-    fps = cap.get(cv2.CAP_PROP_FPS) if cap.get(cv2.CAP_PROP_FPS) > 0 else (fps_override or 30)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    ankle_left_y = []
-    ankle_right_y = []
-    hip_y = []
-    head_y = []
-    frame_idxs = []
+    data = {
+        'frame': [], 'ankle_left_y': [], 'ankle_right_y': [],
+        'hip_y': [], 'knee_angle': [], 'hip_angle': [], 'head_y': []
+    }
 
     pbar = st.progress(0)
+    frame_i = 0
 
-    i = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-        i += 1
+        frame_i += 1
 
-        # Convertir BGR a RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(rgb_frame)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = pose.process(rgb)
 
         h, w, _ = frame.shape
 
         if results.pose_landmarks:
-            landmarks = results.pose_landmarks.landmark
-            
-            # MediaPipe landmarks indices:
-            # 27 = left_ankle, 28 = right_ankle
-            # 23 = left_hip, 24 = right_hip
-            # 0 = nose
-            
-            la = landmarks[27].y * h if landmarks[27].visibility > 0.5 else None
-            ra = landmarks[28].y * h if landmarks[28].visibility > 0.5 else None
-            lh = landmarks[23].y * h if landmarks[23].visibility > 0.5 else None
-            rh = landmarks[24].y * h if landmarks[24].visibility > 0.5 else None
-            nose = landmarks[0].y * h if landmarks[0].visibility > 0.5 else None
-            
-            ankle_left_y.append(la)
-            ankle_right_y.append(ra)
-            
-            if lh is not None and rh is not None:
-                hip_y.append((lh + rh) / 2)
-            else:
-                hip_y.append(None)
-            
-            head_y.append(nose)
-        else:
-            ankle_left_y.append(None)
-            ankle_right_y.append(None)
-            hip_y.append(None)
-            head_y.append(None)
-        
-        frame_idxs.append(i)
+            lm = results.pose_landmarks.landmark
 
-        if frame_count:
-            pbar.progress(min(1.0, i / frame_count))
+            def y(id): return lm[id].y * h if lm[id].visibility > 0.5 else None
+            def xy(id): return (lm[id].x * w, lm[id].y * h) if lm[id].visibility > 0.5 else None
+
+            la = y(27); ra = y(28)
+            lh = y(23); rh = y(24)
+            nose = y(0)
+
+            hip_y = (lh + rh) / 2 if lh and rh else None
+
+            # Angles
+            hip_point = xy(24)
+            knee_point = xy(26)
+            ankle_point = xy(28)
+
+            def angle(a, b, c):
+                if None in [a, b, c]:
+                    return None
+                ba = np.array(a) - np.array(b)
+                bc = np.array(c) - np.array(b)
+                cos_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
+                return np.degrees(np.arccos(np.clip(cos_angle, -1, 1)))
+
+            knee_angle = angle(hip_point, knee_point, ankle_point)
+
+            # Hip angle (flexión)
+            shoulder = xy(12)
+            hip_angle = angle(shoulder, hip_point, knee_point)
+
         else:
-            pbar.progress(min(1.0, i / 300))
+            la = ra = hip_y = knee_angle = hip_angle = nose = None
+
+        data['frame'].append(frame_i)
+        data['ankle_left_y'].append(la)
+        data['ankle_right_y'].append(ra)
+        data['hip_y'].append(hip_y)
+        data['knee_angle'].append(knee_angle)
+        data['hip_angle'].append(hip_angle)
+        data['head_y'].append(nose)
+
+        pbar.progress(min(frame_i / frame_count, 1))
 
     cap.release()
     pose.close()
     pbar.empty()
 
-    df = pd.DataFrame({
-        'frame': frame_idxs,
-        'ankle_left_y': ankle_left_y,
-        'ankle_right_y': ankle_right_y,
-        'hip_y': hip_y,
-        'head_y': head_y,
-    })
+    return pd.DataFrame(data), fps
 
-    return df, fps
-
-# Detect jump frames
+# ------------------ JUMP DETECTION ------------------
 def detect_jump_frames(df, fps):
-    ankles_mean = df[['ankle_left_y', 'ankle_right_y']].mean(axis=1)
-    baseline = ankles_mean.dropna().head(30).median()
+    ankles = df[['ankle_left_y', 'ankle_right_y']].mean(axis=1)
+    baseline = ankles.dropna().head(40).median()
+    delta = 0.04 * baseline
 
-    delta_px = 0.03 * baseline
-
-    off_ground = (df['ankle_left_y'] < (baseline - delta_px)) & (df['ankle_right_y'] < (baseline - delta_px))
+    off_ground = (df['ankle_left_y'] < baseline - delta) & \
+                 (df['ankle_right_y'] < baseline - delta)
 
     idx = np.where(off_ground.fillna(False))[0]
     if len(idx) == 0:
         return None
 
     groups = np.split(idx, np.where(np.diff(idx) != 1)[0] + 1)
-    longest = max(groups, key=len)
+    jump = max(groups, key=len)
 
-    t0, t1 = longest[0], longest[-1]
-    flight_time = (t1 - t0 + 1) / fps
+    t0, t1 = jump[0], jump[-1]
+    T = (t1 - t0 + 1) / fps
 
-    return t0, t1, flight_time, baseline
+    return t0, t1, T, baseline
 
-def flight_time_to_height(T):
-    return 9.81 * T * T / 8
+def flight_height(T): return 9.81 * T * T / 8
 
-def pixel_disp_to_cm(px, px_person_height, real_cm):
-    return (px / px_person_height) * real_cm
+def pixel_to_cm(px, px_height, cm_height):
+    return (px / px_height) * cm_height
 
-# MAIN
-if upload is not None:
+# ------------------ MAIN ------------------
+if upload:
     video_path = save_uploaded_file(upload)
     st.success("Video cargado.")
 
@@ -164,57 +170,92 @@ if upload is not None:
         st.info("Procesando…")
         df, fps = analyze_video(video_path)
 
-        # Estimar altura en pixeles
-        pixel_person_height = (df['head_y'] - df[['ankle_left_y', 'ankle_right_y']].min(axis=1)).dropna().median()
+        # Body height in pixels
+        px_h = (df['head_y'] - df[['ankle_left_y', 'ankle_right_y']].min(axis=1)).dropna().median()
 
-        detect_res = detect_jump_frames(df, fps)
-        if detect_res is None:
-            st.error("No se detectó salto.")
+        res = detect_jump_frames(df, fps)
+        if not res:
+            st.error("No se detectó un salto claro.")
         else:
-            t0, t1, T, baseline = detect_res
-            h_cm = flight_time_to_height(T) * 100
+            t0, t1, T, baseline = res
+            h_cm = flight_height(T) * 100
 
-            st.subheader("Resultados")
-            st.write(f"FPS: {fps:.1f}")
-            st.write(f"Tiempo de vuelo: {T:.3f} s")
-            st.write(f"Altura estimada: **{h_cm:.2f} cm**")
-
-            # Pixel displacement method
             hip = df["hip_y"]
-            hip_base = hip[:t0].dropna().median()
-            hip_apex = hip[t0:t1+1].dropna().min()
-            hip_disp = hip_base - hip_apex
+            base = hip[:t0].dropna().median()
+            apex = hip[t0:t1+1].dropna().min()
+            disp = base - apex
 
-            if pixel_person_height and pixel_person_height > 0:
-                hip_cm = pixel_disp_to_cm(hip_disp, pixel_person_height, user_height_cm)
-                st.write(f"Altura por desplazamiento de cadera: {hip_cm:.2f} cm")
+            real_cm = pixel_to_cm(disp, px_h, user_height_cm)
 
-            # Graficar
+            st.header("Resultados")
+            st.write(f"Tiempo de vuelo: **{T:.3f} s**")
+            st.write(f"Altura por fórmula física: **{h_cm:.1f} cm**")
+            st.write(f"Altura por cadera: **{real_cm:.1f} cm**")
+
+            # ------------------ GRÁFICO ------------------
             if show_plots:
-                fig, ax = plt.subplots(figsize=(10,4))
-                ax.plot(df['frame'], df['hip_y'], label='Cadera', linewidth=2)
-                ax.plot(df['frame'], df['ankle_left_y'], label='Tobillo Izq', alpha=0.7)
-                ax.plot(df['frame'], df['ankle_right_y'], label='Tobillo Der', alpha=0.7)
-                ax.axvline(t0, color='green', linestyle='--', label='Inicio salto')
-                ax.axvline(t1, color='red', linestyle='--', label='Fin salto')
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.plot(df["frame"], df["hip_y"])
+                ax.axvline(t0, color="green")
+                ax.axvline(t1, color="red")
                 ax.invert_yaxis()
-                ax.legend()
-                ax.set_xlabel('Frame')
-                ax.set_ylabel('Posición Y (pixeles)')
-                ax.set_title('Trayectoria del salto')
                 st.pyplot(fig)
 
-            csv = df.to_csv(index=False)
-            st.download_button("Descargar CSV", csv, "jump_data.csv")
-            
-        # Limpiar archivo temporal
-        try:
-            os.unlink(video_path)
-        except:
-            pass
+            # ------------------ IA COACH ------------------
+            if show_ai:
+                prompt = f"""
+                Actúa como un entrenador profesional de salto vertical.
 
+                Datos del salto:
+                - Tiempo de vuelo: {T:.3f}s
+                - Altura física: {h_cm:.1f} cm
+                - Altura por cadera: {real_cm:.1f} cm
+                - Altura del usuario: {user_height_cm} cm
+                - Ángulo de rodilla mínimo: {df['knee_angle'].min()}
+                - Ángulo de cadera mínimo: {df['hip_angle'].min()}
+                - Simetría tobillos: diferencia promedio = {float(df['ankle_left_y'].median() - df['ankle_right_y'].median()):.2f}px
+
+                Evalúa:
+                - técnica del salto
+                - profundidad del squat
+                - explosividad
+                - estabilidad lateral
+                - simetría
+                - recomendaciones avanzadas
+                """
+
+                with st.spinner("Generando análisis IA…"):
+                    ai = client.chat.completions.create(
+                        model="gpt-4.1",
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+
+                st.subheader("🧠 IA Coach")
+                st.write(ai.choices[0].message["content"])
+
+            # ------------------ PREDICCIÓN ------------------
+            if show_predict:
+                if "jump_history.csv" in os.listdir():
+                    old = pd.read_csv("jump_history.csv")
+                else:
+                    old = pd.DataFrame(columns=["jump"])
+
+                new = pd.DataFrame({"jump": [real_cm]})
+                total = pd.concat([old, new], ignore_index=True)
+                total.to_csv("jump_history.csv", index=False)
+
+                if len(total) > 2:
+                    X = np.arange(len(total)).reshape(-1, 1)
+                    y = total["jump"].values
+                    model = LinearRegression().fit(X, y)
+                    future = model.predict([[len(total)]])[0]
+
+                    st.subheader("📈 Predicción")
+                    st.write(f"Tu próximo salto estimado: **{future:.1f} cm**")
+
+                else:
+                    st.info("Aún no hay suficientes saltos para predecir.")
+
+        os.unlink(video_path)
 else:
     st.warning("Sube un video para comenzar.")
-
-st.markdown("---")
-st.caption("Funciona con MediaPipe — Compatible con Python 3.13")
