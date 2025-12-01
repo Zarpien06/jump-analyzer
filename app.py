@@ -1,6 +1,9 @@
 import streamlit as st
 import cv2
 import os
+os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
+os.environ["OPENCV_OPENCL_RUNTIME"] = "disabled"
+os.environ["CV2_HEADLESS"] = "1"
 import mediapipe as mp
 import numpy as np
 import pandas as pd
@@ -9,8 +12,7 @@ import math
 from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from openai import OpenAI
-os.environ["OPENCV_OPENCL_RUNTIME"] = "disabled"
-os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
+
 
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Jump Analyzer IA", layout="wide")
